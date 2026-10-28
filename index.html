@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>실시간 참여 · 맨 앞 플로팅</title>
+<!--
+  261029 인천대 특강 · 컴퓨터용 ‘맨 앞 플로팅’ 참여 페이지 (V.6.0)
+  - 이 파일 하나를 GitHub Pages 같은 정적 웹호스팅에 올려 쓰세요. (구글 웹앱 안에서는 맨 앞 창 기능이 막혀 있어 따로 둡니다)
+  - 아래 API_URL 에 구글 웹앱 주소(/exec 로 끝나는 주소)를 넣으세요.
+    또는 주소 뒤에 ?api=웹앱주소 를 붙여 열어도 됩니다.
+-->
+<style>
+  :root{
+    --bg:#f4f2ee; --card:#ffffff; --ink:#1d2433; --muted:#6b7280; --line:#e3e0da;
+    --brand:#15393f; --brand-ink:#ffffff; --accent:#e7a33e; --ok:#2f7d5b; --warn:#b4472f; --soft:#e9f1f0;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;-webkit-text-size-adjust:100%}
+  header{position:sticky;top:0;z-index:5;background:var(--brand);color:var(--brand-ink);padding:12px 16px 10px}
+  header .t{font-size:15px;font-weight:700;line-height:1.3}
+  header .s{font-size:12px;opacity:.75;margin-top:2px;display:flex;justify-content:space-between;gap:8px}
+  #timer{height:6px;background:rgba(255,255,255,.15);margin:8px -16px -10px;display:none}
+  #timer>i{display:block;height:100%;background:var(--accent);width:0;transition:width .9s linear}
+  #timerText{font-variant-numeric:tabular-nums;font-weight:700}
+  main{padding:16px 16px 96px;max-width:640px;margin:0 auto}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 16px;margin-bottom:14px}
+  .tag{display:inline-block;font-size:11px;font-weight:700;color:var(--brand);background:var(--soft);border-radius:999px;padding:3px 9px;margin-bottom:8px}
+  h1{font-size:20px;margin:0 0 8px;line-height:1.35}
+  .prompt{font-size:16px;line-height:1.55;white-space:pre-line;margin:0 0 14px}
+  label.f{display:block;font-size:13px;font-weight:700;margin:14px 0 6px}
+  input[type=text],textarea,select{width:100%;font:inherit;font-size:16px;padding:12px;border:1.5px solid var(--line);border-radius:12px;background:#fff;color:var(--ink)}
+  textarea{min-height:84px;resize:vertical}
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--brand)}
+  .opt{display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;font:inherit;font-size:16px;line-height:1.45;padding:14px;margin:0 0 10px;border:1.5px solid var(--line);border-radius:14px;background:#fff;color:var(--ink);cursor:pointer}
+  .opt .k{flex:0 0 26px;height:26px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;font-size:13px;font-weight:700;color:var(--muted)}
+  .opt.sel{border-color:var(--brand);background:var(--soft)}
+  .opt.sel .k{background:var(--brand);border-color:var(--brand);color:#fff}
+  .opt.right{border-color:var(--ok);background:#e9f5ef}
+  .opt.right .k{background:var(--ok);border-color:var(--ok);color:#fff}
+  .multi .opt .k{border-radius:7px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{font:inherit;font-size:14px;padding:10px 14px;border:1.5px solid var(--line);border-radius:999px;background:#fff;color:var(--ink)}
+  .chip.sel{border-color:var(--brand);background:var(--brand);color:#fff}
+  .btn{display:block;width:100%;font:inherit;font-size:17px;font-weight:700;padding:15px;border:0;border-radius:14px;background:var(--brand);color:#fff;margin-top:16px;cursor:pointer}
+  .btn:disabled{opacity:.5}
+  .btn.ghost{background:#fff;color:var(--brand);border:1.5px solid var(--brand)}
+  .btn.link{background:var(--accent)}
+  .note{font-size:13px;color:var(--muted);margin-top:10px;line-height:1.5}
+  .done{display:flex;gap:10px;align-items:center;background:#e9f5ef;color:var(--ok);border-radius:12px;padding:12px 14px;font-weight:700;margin-top:14px;font-size:15px}
+  .closed{background:#fbefe9;color:var(--warn)}
+  .explain{background:#fff8ef;border:1px solid #f3d9bd;border-radius:12px;padding:12px 14px;font-size:15px;line-height:1.5;margin-top:12px}
+  .err{color:var(--warn);font-size:14px;margin-top:10px;min-height:1em}
+  nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:#fff;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:6}
+  nav button{flex:1;font:inherit;font-size:15px;font-weight:700;padding:14px 0 16px;border:0;background:none;color:var(--muted);position:relative}
+  nav button.on{color:var(--brand)}
+  nav button.on::after{content:"";position:absolute;left:30%;right:30%;top:0;height:3px;border-radius:0 0 3px 3px;background:var(--brand)}
+  .badge{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:var(--accent);color:#fff;font-size:11px;line-height:18px;margin-left:4px;vertical-align:2px}
+  .q{display:flex;gap:12px;align-items:flex-start;padding:14px 0;border-top:1px solid var(--line)}
+  .q:first-child{border-top:0}
+  .q .tx{flex:1;font-size:15px;line-height:1.5;word-break:break-word}
+  .q .meta{font-size:12px;color:var(--muted);margin-top:4px}
+  .like{flex:0 0 auto;font:inherit;font-size:14px;font-weight:700;border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:7px 12px;color:var(--muted)}
+  .like.on{border-color:var(--accent);color:var(--accent);background:#fff4ec}
+  .ans{opacity:.55}
+  .wait{text-align:center;padding:28px 10px}
+  .pulse{width:14px;height:14px;border-radius:50%;background:var(--accent);margin:0 auto 14px;animation:p 1.6s infinite}
+  @keyframes p{0%{box-shadow:0 0 0 0 rgba(231,163,62,.5)}70%{box-shadow:0 0 0 16px rgba(231,163,62,0)}100%{box-shadow:0 0 0 0 rgba(231,163,62,0)}}
+  .hidden{display:none!important}
+  /* ── 컴퓨터 화면: 슬라이드 크게 + 드래그 가능한 플로팅 참여 창 ── */
+  #win{display:contents}
+  #winHead,#deskStage{display:none}
+  body.desk{overflow:hidden;height:100vh}
+  body.desk header{position:fixed;left:0;right:0;top:0}
+  body.desk #deskStage{display:flex;position:fixed;left:0;right:0;top:var(--hh,62px);bottom:0;background:#0d1417;align-items:center;justify-content:center}
+  body.desk #deskImg{max-width:100%;max-height:100%;object-fit:contain;display:block}
+  #deskFb{display:none;color:#fff;text-align:center;padding:5vw}
+  #deskFb .n{font-size:20px;opacity:.6;margin-bottom:12px}
+  #deskFb .t{font-size:clamp(28px,4vw,56px);font-weight:800;line-height:1.3}
+  body.desk #win{display:flex;flex-direction:column;position:fixed;z-index:15;top:calc(var(--hh,62px) + 14px);right:24px;width:420px;height:min(640px,calc(100vh - 110px));min-width:300px;min-height:220px;max-width:calc(100vw - 16px);max-height:calc(100vh - 70px);background:var(--bg);border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.35),0 0 0 1px rgba(0,0,0,.08);overflow:hidden;resize:both}
+  body.desk #winHead{display:flex;align-items:center;gap:8px;flex:0 0 auto;padding:9px 10px 9px 12px;background:#0f2a2e;color:#fff;cursor:grab;user-select:none;touch-action:none}
+  body.desk #winHead:active{cursor:grabbing}
+  #winHead .grip{opacity:.6;font-size:16px;letter-spacing:-2px}
+  #winHead b{font-size:14px}
+  #winHead #winState{flex:1;min-width:0;font-size:12px;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #winHead button{font:inherit;font-size:18px;line-height:1;width:30px;height:28px;border-radius:8px;border:0;background:rgba(255,255,255,.12);color:#fff;cursor:pointer}
+  #winHead.flash{animation:fl 1s ease 0s 5}
+  @keyframes fl{0%,100%{background:#0f2a2e}50%{background:var(--accent);color:#1d2433}}
+  body.desk main{flex:1 1 auto;overflow:auto;padding:12px 12px 14px;max-width:none;margin:0}
+  body.desk nav{position:static;flex:0 0 auto;padding-bottom:0}
+  body.desk #win.min{height:auto!important;min-height:0;min-width:0;width:280px!important;resize:none}
+  body.desk #win.min main,body.desk #win.min nav{display:none}
+  body.desk .slidecard .slidelink{display:none}
+  #winHead #winTimer{font-size:13px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums}
+  /* ── 맨 앞 플로팅 창 (Document Picture-in-Picture) 안에서 ── */
+  body.inpip{margin:0;height:100vh;overflow:hidden;background:var(--bg)}
+  body.inpip #win{display:flex!important;flex-direction:column;position:static!important;width:100%!important;height:100vh!important;min-width:0;min-height:0;max-width:none;max-height:none;border-radius:0;box-shadow:none;resize:none!important}
+  body.inpip #winHead{display:flex!important;align-items:center;gap:8px;flex:0 0 auto;padding:8px 12px;background:#0f2a2e;color:#fff;cursor:default}
+  body.inpip #winHead .grip,body.inpip #winMin{display:none}
+  body.inpip main{flex:1 1 auto;overflow:auto;padding:10px 10px 14px;max-width:none;margin:0}
+  body.inpip nav{position:static!important;flex:0 0 auto;display:flex}
+  #pipNotice{display:none}
+  body.pipout #pipNotice{display:flex;position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:30;gap:12px;align-items:center;background:var(--ink);color:#fff;padding:12px 16px;border-radius:14px;font-size:14px;box-shadow:0 10px 30px rgba(0,0,0,.3);max-width:92vw}
+  #pipNotice button{font:inherit;font-weight:700;font-size:13px;border:0;border-radius:999px;padding:7px 12px;background:var(--accent);color:#1d2433;cursor:pointer;white-space:nowrap}
+  body.pipout:not(.desk) main{display:none}
+  .floatlink{flex:0 0 auto;font-size:13px;font-weight:700;padding:7px 12px;border-radius:999px;background:var(--accent);color:#1d2433;text-decoration:none;white-space:nowrap}
+  .trow{display:flex;align-items:center;gap:10px}
+  .trow .t{flex:1;min-width:0}
+  .pipbtn{flex:0 0 auto;font:inherit;font-size:13px;font-weight:700;padding:7px 12px;border-radius:999px;border:1.5px solid rgba(255,255,255,.55);background:transparent;color:#fff;cursor:pointer}
+  .pipbtn:hover{background:rgba(255,255,255,.12)}
+  .pipbtn.on{background:var(--accent);border-color:var(--accent);color:#1d2433}
+  #pipVideo{position:fixed;left:-10000px;top:0;width:320px;height:200px;opacity:0;pointer-events:none}
+  .piptip{position:fixed;left:50%;top:70px;transform:translateX(-50%);z-index:20;background:var(--ink);color:#fff;font-size:14px;line-height:1.5;padding:12px 16px;border-radius:12px;max-width:min(520px,92vw);box-shadow:0 8px 24px rgba(0,0,0,.2)}
+  .slidecard{padding:10px 10px 16px}
+  .slidecard .tag,.slidecard h1,.slidecard .note{margin-left:6px;margin-right:6px}
+  .slidelink{display:block;margin:0 0 12px}
+  .slideimg{display:block;width:100%;aspect-ratio:16/9;object-fit:contain;border-radius:10px;background:#e9e6e0}
+  .conn{font-size:11px}
+  .conn.bad{color:#ffd2c2}
+</style>
+</head>
+<body>
+<header>
+  <div class="trow"><div class="t" id="hTitle"></div><button id="pipBtn" class="pipbtn hidden" type="button" title="다른 프로그램을 쓰는 동안에도 맨 앞에 떠 있는 미니 창">🗔 항상 위에 띄우기</button></div>
+  <div class="s"><span id="hName"></span><span><span id="timerText"></span> <span class="conn" id="conn">●</span></span></div>
+  <div id="timer"><i></i></div>
+</header>
+
+<div id="deskStage" aria-hidden="true"><img id="deskImg" alt=""><div id="deskFb"><div class="n"></div><div class="t"></div></div></div>
+<div id="win">
+<div id="winHead" title="끌어서 옮기기 · 두 번 클릭하면 접기/펴기"><span class="grip">⠿</span><b>참여 창</b><span id="winState"></span><span id="winTimer"></span><button id="winMin" type="button" title="접기/펴기">–</button></div>
+<main>
+  <section id="joinView" class="card hidden">
+    <span class="tag">입장</span>
+    <h1>반가워요!</h1>
+    <p class="prompt">화면에 표시할 이름(닉네임)을 적어 주세요. 비워 두면 ‘익명’으로 참여합니다. 발표 화면에는 기본적으로 이름이 표시되지 않습니다.</p>
+    <input type="text" id="nameInput" maxlength="20" placeholder="예: 영교 23 / 민지" autocomplete="off">
+    <button class="btn" id="joinBtn">참여하기</button>
+  </section>
+
+  <section id="actView"></section>
+  <section id="qnaView" class="hidden"></section>
+</main>
+
+<nav id="nav" class="hidden">
+  <button id="tabAct" class="on">활동</button>
+  <button id="tabQna">질문하기 <span id="qBadge" class="badge hidden"></span></button>
+</nav>
+</div>
+<video id="pipVideo" muted playsinline aria-hidden="true"></video>
+<div id="pipNotice"><span>참여 창이 <b>맨 앞 창</b>으로 떠 있어요. 다른 프로그램을 써도 계속 보입니다.</span><button id="pipBack" type="button">창 다시 합치기</button></div>
+<div id="pipTip" class="piptip hidden"></div>
+
+
+<script>
+// ★ 설정: 구글 Apps Script 웹앱 주소 (/exec 로 끝남)
+var API_URL = '';
+
+// ── google.script.run 대신 웹앱 데이터 API 를 부르는 연결부 ──
+window.__FLOAT = true;
+(function(){
+  var q = new URLSearchParams(location.search).get('api');
+  window.__API = (q || API_URL || '').trim();
+  function apiCall(fn, args){
+    var A = window.__API, req;
+    if(fn==='studentSync') req = fetch(A+'?api=sync&_='+Date.now());
+    else if(fn==='getQna') req = fetch(A+'?api=qna&cid='+encodeURIComponent(args[0]||'')+'&_='+Date.now());
+    else req = fetch(A, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({fn:fn, args:args})});
+    return req.then(function(r){ return r.json(); }).then(function(j){ if(!j || !j.ok) throw new Error((j && j.error) || '서버 오류'); return j.result; });
+  }
+  window.google = { script: { get run(){
+    var ok=null, fail=null, r={};
+    r.withSuccessHandler=function(f){ ok=f; return r; };
+    r.withFailureHandler=function(f){ fail=f; return r; };
+    ['studentSync','getQna','submitResponse','askQuestion','toggleLike'].forEach(function(fn){
+      r[fn]=function(){ var args=[].slice.call(arguments); apiCall(fn,args).then(function(x){ ok&&ok(x); }, function(e){ fail&&fail(e); }); };
+    });
+    return r;
+  } } };
+  window.__apiCall = apiCall;
+})();
+</script>
+<script>
+function __app(){
+
+var BOOT = window.__BOOT;
+var ACTS = {}; BOOT.activities.forEach(function(a){ ACTS[a.id]=a; });
+
+// ── 로컬 저장 (막혀 있어도 동작) ──
+var mem = {};
+function lsGet(k){ try{ var v=localStorage.getItem('inu1029_'+k); return v===null?mem[k]:v; }catch(e){ return mem[k]; } }
+function lsSet(k,v){ mem[k]=v; try{ localStorage.setItem('inu1029_'+k,v); }catch(e){} }
+
+var clientId = lsGet('cid');
+if(!clientId){ clientId = 'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,10); lsSet('cid',clientId); }
+var myName = lsGet('name');
+var subs = {}; try{ subs = JSON.parse(lsGet('subs')||'{}'); }catch(e){ subs={}; }
+function saveSubs(){ lsSet('subs', JSON.stringify(subs)); }
+
+var state = null, renderedKey = '', draft = {}, tab = 'act', clockSkew = 0, failCount = 0;
+var qnaList = [], lastQnaSeen = Number(lsGet('qseen')||0);
+
+function $(id){ return document.getElementById(id) || (DPIP.win && !DPIP.win.closed ? DPIP.win.document.getElementById(id) : null); }
+var DPIP={win:null,ph:null};
+function el(tag, attrs, kids){
+  var e=document.createElement(tag);
+  if(attrs) for(var k in attrs){ if(k==='text') e.textContent=attrs[k]; else if(k==='cls') e.className=attrs[k]; else if(k.slice(0,2)==='on') e.addEventListener(k.slice(2),attrs[k]); else e.setAttribute(k,attrs[k]); }
+  (kids||[]).forEach(function(c){ if(c) e.appendChild(typeof c==='string'?document.createTextNode(c):c); });
+  return e;
+}
+
+$('hTitle').textContent = BOOT.title;
+function showName(){ $('hName').textContent = myName ? (myName+' 님') : '익명 참여'; }
+
+// ── 서버 호출 ──
+function call(fn, args, ok, fail){
+  var r = google.script.run.withSuccessHandler(function(x){ failCount=0; setConn(true); ok&&ok(x); })
+    .withFailureHandler(function(e){ failCount++; setConn(failCount<3); fail&&fail(e); });
+  r[fn].apply(r, args||[]);
+}
+function setConn(good){ var c=$('conn'); c.className='conn'+(good?'':' bad'); c.title=good?'연결됨':'연결 지연'; }
+
+// ── 입장 ──
+function start(){
+  if(myName===undefined || myName===null){
+    $('joinView').classList.remove('hidden');
+    $('nameInput').focus();
+    $('joinBtn').onclick=function(){ myName=$('nameInput').value.trim().slice(0,20); lsSet('name',myName); $('joinView').classList.add('hidden'); begin(); };
+    $('nameInput').addEventListener('keydown',function(e){ if(e.key==='Enter') $('joinBtn').click(); });
+  } else begin();
+}
+function begin(){
+  showName();
+  deskSetup();
+  pipSetup();
+  $('nav').classList.remove('hidden');
+  $('actView').appendChild(el('div',{cls:'card wait'},[el('div',{cls:'pulse'}), el('div',{text:'연결 중…'})]));
+  poll();
+  setInterval(tickTimer, 500);
+  setInterval(function(){ if(tab==='qna') loadQna(); else if(Math.random()<0.25) loadQna(true); }, Math.max(6000, BOOT.pollMs*1.5));
+}
+
+var pollTimer=null;
+function poll(){
+  clearTimeout(pollTimer);
+  call('studentSync', [], function(s){
+    clockSkew = s.now - Date.now();
+    state = s; render();
+    schedule();
+  }, function(){ schedule(true); });
+}
+function schedule(slow){
+  var base = BOOT.pollMs * (slow ? Math.min(4, 1+failCount) : 1);
+  pollTimer = setTimeout(poll, base + Math.random()*800);
+}
+document.addEventListener('visibilitychange', function(){ if(!document.hidden && state) poll(); });
+
+// ── 타이머 ──
+function tickTimer(){
+  var bar=$('timer'), t=$('timerText');
+  var wt=$('winTimer');
+  if(!state || !state.timerEnd){ bar.style.display='none'; t.textContent=''; if(wt) wt.textContent=''; return; }
+  var left = Math.max(0, state.timerEnd - (Date.now()+clockSkew));
+  bar.style.display='block';
+  bar.firstElementChild.style.width = (state.timerTotal ? (100*left/(state.timerTotal*1000)) : 0)+'%';
+  var s=Math.ceil(left/1000); t.textContent = left>0 ? ('⏱ '+Math.floor(s/60)+':'+('0'+s%60).slice(-2)) : '⏱ 종료';
+  if(wt) wt.textContent=t.textContent;
+}
+
+// ── 활동 화면 ──
+function submittedFor(a){ var x=subs[a.id]; return x && x.at >= (state.reset||0) ? x : null; }
+
+var SLIDE_T = {}; (BOOT.slides||[]).forEach(function(x){ SLIDE_T[x.n]=x.title; });
+function slideImg(n, w){
+  var id=(BOOT.slideIds||[])[n-1]; if(!id) return null;
+  var urls=['https://lh3.googleusercontent.com/d/'+id+'=w'+w, 'https://drive.google.com/thumbnail?id='+id+'&sz=w'+w];
+  var img=el('img',{alt:'슬라이드 '+n,cls:'slideimg'}); var k=0;
+  img.onerror=function(){ k++; if(k<urls.length) img.src=urls[k]; else img.style.display='none'; };
+  img.src=urls[0];
+  return img;
+}
+function renderSlide(){
+  var n=state.slide||1, key='slide:'+n;
+  if(key===renderedKey) return;
+  captureDraft(); renderedKey=key;
+  var root=$('actView'); root.innerHTML='';
+  var card=el('div',{cls:'card slidecard'});
+  var img = (BOOT.studentSlides && (!DESK || DPIP.win)) ? slideImg(n, 1200) : null;
+  if(img){
+    var id=BOOT.slideIds[n-1];
+    card.appendChild(el('a',{href:'https://lh3.googleusercontent.com/d/'+id+'=w1920',target:'_blank',rel:'noopener',cls:'slidelink'},[img]));
+  }
+  card.appendChild(el('span',{cls:'tag',text:'슬라이드 '+n+' / '+(BOOT.slides||[]).length}));
+  card.appendChild(el('h1',{text:SLIDE_T[n]||''}));
+  card.appendChild(el('div',{cls:'note',text: DPIP.win ? '활동이 열리면 이 창이 자동으로 바뀝니다. 이 창은 다른 프로그램 위에 계속 떠 있어요.' : DESK ? '슬라이드는 뒤쪽 큰 화면에 나옵니다. 활동이 열리면 이 창이 자동으로 바뀝니다.' : (img ? '슬라이드를 누르면 크게 볼 수 있어요. 활동이 열리면 화면이 자동으로 바뀝니다.' : '활동이 열리면 화면이 자동으로 바뀝니다.')}));
+  root.appendChild(card);
+}
+
+function render(){
+  pipDraw();
+  deskUpdate();
+  if(!state.activityId) return renderSlide();
+  var a = ACTS[state.activityId] || BOOT.activities[0];
+  var sub = submittedFor(a);
+  var key = [a.id, state.open, state.reveal, sub?sub.at:0, state.reset].join('|');
+  if(key===renderedKey) return;
+  // 작성 중인 입력이 있으면 내용 보존
+  captureDraft();
+  renderedKey = key;
+  var root=$('actView'); root.innerHTML='';
+  var card = el('div',{cls:'card'});
+  card.appendChild(el('span',{cls:'tag',text:'슬라이드 '+a.slide}));
+  card.appendChild(el('h1',{text:a.title}));
+  if(a.prompt) card.appendChild(el('p',{cls:'prompt',text:a.prompt}));
+  if(a.link) card.appendChild(el('a',{cls:'btn link',href:a.link.url,target:'_blank',rel:'noopener',style:'text-decoration:none;text-align:center;margin:0 0 6px',text:a.link.label+' ↗'}));
+
+  if(a.type==='info'){ card.appendChild(el('div',{cls:'wait'},[el('div',{cls:'pulse'}), el('div',{cls:'note',text:'다음 활동을 기다리는 중'})])); }
+  else if(a.type==='qna'){ card.appendChild(el('button',{cls:'btn',text:'질문하러 가기',onclick:function(){ setTab('qna'); }})); }
+  else buildForm(card, a, sub);
+  root.appendChild(card);
+  window.scrollTo(0,0);
+}
+
+function buildForm(card, a, sub){
+  var locked = !state.open || (state.reveal && state.answer!==undefined);
+  var d = draft[a.id] || (sub ? JSON.parse(JSON.stringify(sub.p)) : {});
+  draft[a.id] = d;
+  var box = el('div',{id:'formBox'});
+
+  if(a.type==='poll' || a.type==='multi'){
+    var wrap = el('div',{cls:a.type==='multi'?'multi':''});
+    var ans = state.reveal && state.answer!==undefined ? [].concat(state.answer) : null;
+    a.options.forEach(function(o,i){
+      var sel = a.type==='poll' ? d.choice===i : (d.choices||[]).indexOf(i)>=0;
+      var cls = 'opt'+(sel?' sel':'')+(ans && ans.indexOf(i)>=0?' right':'');
+      var b = el('button',{cls:cls,type:'button'},[el('span',{cls:'k',text:a.type==='multi'?(sel?'✓':''):String(i+1)}), el('span',{text:o})]);
+      b.onclick=function(){ if(locked) return;
+        if(a.type==='poll'){ d.choice=i; } else { d.choices=d.choices||[]; var p=d.choices.indexOf(i); if(p>=0) d.choices.splice(p,1); else d.choices.push(i); }
+        renderedKey=''; render(); };
+      wrap.appendChild(b);
+    });
+    box.appendChild(wrap);
+  } else if(a.type==='words'){
+    var n=a.maxWords||1; d.words=d.words||[];
+    for(var i=0;i<n;i++){ box.appendChild(el('input',{type:'text',maxlength:'24','data-w':String(i),placeholder:i===0?(a.placeholder||''):'(선택) 하나 더',value:d.words[i]||''})); if(i<n-1) box.appendChild(el('div',{style:'height:8px'})); }
+  } else if(a.type==='text'){
+    if(a.tags){
+      var chips=el('div',{cls:'chips',style:'margin-bottom:12px'});
+      a.tags.forEach(function(t,i){ var c=el('button',{type:'button',cls:'chip'+(d.tag===i?' sel':''),text:t}); c.onclick=function(){ if(locked) return; captureDraft(); d.tag=i; renderedKey=''; render(); }; chips.appendChild(c); });
+      box.appendChild(chips);
+    }
+    var ta=el('textarea',{maxlength:'300','data-k':'text',placeholder:a.placeholder||''}); ta.value=d.text||''; box.appendChild(ta);
+  } else if(a.type==='form'){
+    a.fields.forEach(function(f){
+      box.appendChild(el('label',{cls:'f',text:f.label}));
+      var inp;
+      if(f.type==='select'){ inp=el('select',{'data-k':f.key}); inp.appendChild(el('option',{value:'',text:'선택하세요'})); f.options.forEach(function(o){ var op=el('option',{value:o,text:o}); if(d[f.key]===o) op.selected=true; inp.appendChild(op); }); }
+      else if(f.type==='textarea'){ inp=el('textarea',{'data-k':f.key,maxlength:'400',placeholder:f.placeholder||''}); inp.value=d[f.key]||''; }
+      else { inp=el('input',{type:'text','data-k':f.key,maxlength:'200',placeholder:f.placeholder||''}); inp.value=d[f.key]||''; }
+      box.appendChild(inp);
+    });
+  }
+  card.appendChild(box);
+  if(locked) box.querySelectorAll('input,textarea,select').forEach(function(x){ x.disabled=true; });
+
+  if(state.reveal && state.explain) card.appendChild(el('div',{cls:'explain',text:'💡 '+state.explain}));
+
+  var err=el('div',{cls:'err',id:'err'});
+  if(locked){
+    card.appendChild(el('div',{cls:'done closed',text: sub ? '응답 마감 · 내 응답이 반영되었습니다' : (state.open ? '정답이 공개되어 응답을 받지 않습니다' : '응답이 마감되었습니다')}));
+  } else {
+    var btn=el('button',{cls:'btn',id:'sendBtn',text: sub ? '수정해서 다시 제출' : '제출하기'});
+    btn.onclick=function(){ send(a, btn, err); };
+    card.appendChild(btn);
+    if(sub) card.appendChild(el('div',{cls:'done',text:'✓ 제출되었습니다. 고쳐서 다시 내면 덮어씁니다.'}));
+  }
+  card.appendChild(err);
+}
+
+function captureDraft(){
+  if(!state) return;
+  var a=ACTS[renderedKey.split('|')[0]]; if(!a) return;
+  var d=draft[a.id]; if(!d) return;
+  var box=$('formBox'); if(!box) return;
+  if(a.type==='words'){ d.words=[].map.call(box.querySelectorAll('[data-w]'),function(x){ return x.value.trim(); }); }
+  box.querySelectorAll('[data-k]').forEach(function(x){ d[x.getAttribute('data-k')]=x.value; });
+}
+
+function send(a, btn, err){
+  captureDraft();
+  var d=draft[a.id], payload;
+  if(a.type==='poll') payload={choice:d.choice};
+  else if(a.type==='multi') payload={choices:d.choices||[]};
+  else if(a.type==='words') payload={words:(d.words||[]).filter(function(x){return x;})};
+  else if(a.type==='text') payload={text:d.text||'',tag:d.tag};
+  else { payload={}; a.fields.forEach(function(f){ payload[f.key]=d[f.key]||''; }); }
+  btn.disabled=true; btn.textContent='보내는 중…'; err.textContent='';
+  call('submitResponse',[clientId,myName||'',a.id,payload],function(){
+    subs[a.id]={at:Date.now()+clockSkew,p:payload}; saveSubs();
+    delete draft[a.id]; renderedKey=''; render();
+  },function(e){
+    btn.disabled=false; btn.textContent='다시 시도'; err.textContent=(e&&e.message?e.message:'전송 실패')+'';
+  });
+}
+
+// ── Q&A ──
+function setTab(t){
+  tab=t;
+  $('tabAct').classList.toggle('on',t==='act'); $('tabQna').classList.toggle('on',t==='qna');
+  $('actView').classList.toggle('hidden',t!=='act'); $('qnaView').classList.toggle('hidden',t!=='qna');
+  if(t==='qna'){ buildQna(); loadQna(); }
+  window.scrollTo(0,0);
+}
+$('tabAct').onclick=function(){ setTab('act'); };
+$('tabQna').onclick=function(){ setTab('qna'); };
+
+var qnaBuilt=false;
+function buildQna(){
+  if(qnaBuilt) return; qnaBuilt=true;
+  var v=$('qnaView');
+  var c1=el('div',{cls:'card'});
+  c1.appendChild(el('span',{cls:'tag',text:'질의응답'}));
+  c1.appendChild(el('h1',{text:'질문 남기기'}));
+  c1.appendChild(el('p',{cls:'note',style:'margin-top:0',text:'질문은 이름 없이 발표 화면에 표시됩니다. 다른 질문에 ♥를 누르면 먼저 다뤄집니다.'}));
+  var ta=el('textarea',{id:'qText',maxlength:'300',placeholder:'예: 일반 학교 내신 평가에도 C 기준(개념적 이해)을 넣을 수 있을까요?'});
+  var err=el('div',{cls:'err'});
+  var b=el('button',{cls:'btn',text:'질문 보내기'});
+  b.onclick=function(){
+    var t=ta.value.trim(); if(!t){ err.textContent='질문을 입력해 주세요.'; return; }
+    b.disabled=true; err.textContent='';
+    call('askQuestion',[clientId,myName||'',t],function(){ ta.value=''; b.disabled=false; err.textContent=''; loadQna(); },function(e){ b.disabled=false; err.textContent=e&&e.message||'전송 실패'; });
+  };
+  c1.appendChild(ta); c1.appendChild(b); c1.appendChild(err);
+  v.appendChild(c1);
+  v.appendChild(el('div',{cls:'card',id:'qList'}));
+}
+function loadQna(quiet){
+  call('getQna',[clientId],function(list){ qnaList=list; if(tab==='qna'){ drawQna(); markSeen(); } updateBadge(); });
+}
+function markSeen(){ lastQnaSeen = qnaList.reduce(function(m,q){ return Math.max(m,q.ts); }, lastQnaSeen); lsSet('qseen',lastQnaSeen); }
+function updateBadge(){
+  var n = qnaList.filter(function(q){ return q.ts>lastQnaSeen && !q.mine; }).length;
+  var b=$('qBadge'); if(n>0 && tab!=='qna'){ b.textContent=n; b.classList.remove('hidden'); } else b.classList.add('hidden');
+}
+function drawQna(){
+  var box=$('qList'); if(!box) return; box.innerHTML='';
+  box.appendChild(el('h1',{text:'모두의 질문 ('+qnaList.length+')',style:'font-size:17px'}));
+  if(!qnaList.length){ box.appendChild(el('div',{cls:'note',text:'아직 질문이 없어요. 첫 질문을 남겨 보세요!'})); return; }
+  qnaList.forEach(function(q){
+    var like=el('button',{cls:'like'+(q.liked?' on':''),text:'♥ '+q.likes});
+    like.onclick=function(){
+      q.liked=!q.liked; q.likes+=q.liked?1:-1; drawQna();
+      call('toggleLike',[clientId,q.id],function(){ loadQna(); });
+    };
+    var meta = (q.mine?'내 질문 · ':'')+(q.answered?'답변 완료':'');
+    box.appendChild(el('div',{cls:'q'+(q.answered?' ans':'')},[el('div',{cls:'tx'},[el('div',{text:q.text}), meta?el('div',{cls:'meta',text:meta}):null]), like]));
+  });
+}
+
+// ── 컴퓨터용: 항상 위에 떠 있는 미니 창 (Picture-in-Picture) ──
+var PIP={canvas:null,ctx:null,video:null,img:{},lastAct:'',actAt:0};
+var PW=960, PH=600, FONT='"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+function pipSupported(){
+  try{ return !!(document.pictureInPictureEnabled && HTMLCanvasElement.prototype.captureStream && window.matchMedia('(pointer:fine)').matches && window.innerWidth>=700); }catch(e){ return false; }
+}
+function docPipSupported(){
+  try{ return !!window.documentPictureInPicture && window.top===window && window.matchMedia('(pointer:fine)').matches; }catch(e){ return false; }
+}
+function floatLinkSetup(){
+  // 구글 웹앱(프레임 안)에서 컴퓨터로 접속하면 ‘맨 앞 플로팅’ 페이지로 안내
+  if(window.__FLOAT || !BOOT.floatUrl || docPipSupported()) return;
+  try{ if(!window.matchMedia('(pointer:fine)').matches || window.innerWidth<700) return; }catch(e){ return; }
+  var a=el('a',{cls:'floatlink',href:BOOT.floatUrl,target:'_blank',rel:'noopener',title:'다른 프로그램 위에도 떠 있는 참여 창을 쓰려면 이 페이지로 접속하세요',text:'🗔 맨 앞 플로팅 참여 화면 ↗'});
+  var row=document.querySelector('.trow'); row.insertBefore(a,$('pipBtn'));
+}
+function docPipSetup(){
+  var btn=$('pipBtn'); btn.classList.remove('hidden');
+  btn.textContent='🗔 맨 앞에 띄우기';
+  btn.title='참여 창을 따로 떼어 모든 프로그램보다 앞에 띄웁니다 (입력·제출 가능)';
+  btn.onclick=function(){ if(DPIP.win) DPIP.win.close(); else openDocPip(); };
+  $('pipBack').onclick=function(){ if(DPIP.win) DPIP.win.close(); };
+}
+function openDocPip(){
+  var w=$('win');
+  documentPictureInPicture.requestWindow({width:440,height:Math.min(720,Math.max(480,screen.availHeight-160))}).then(function(pw){
+    DPIP.win=pw;
+    pw.document.title='참여 창 · '+BOOT.title;
+    [].forEach.call(document.querySelectorAll('style'),function(st){ var n=pw.document.createElement('style'); n.textContent=st.textContent; pw.document.head.appendChild(n); });
+    var mv=pw.document.createElement('meta'); mv.name='viewport'; mv.content='width=device-width, initial-scale=1'; pw.document.head.appendChild(mv);
+    pw.document.body.className='inpip';
+    DPIP.ph=document.createComment('win');
+    w.parentNode.insertBefore(DPIP.ph,w);
+    w.classList.remove('min');
+    pw.document.body.appendChild(w);
+    document.body.classList.add('pipout');
+    var btn=$('pipBtn'); btn.classList.add('on'); btn.textContent='🗔 창 다시 합치기';
+    pw.addEventListener('pagehide',function(){
+      try{ DPIP.ph.parentNode.insertBefore(w,DPIP.ph); DPIP.ph.remove(); }catch(e){}
+      DPIP.win=null; document.body.classList.remove('pipout');
+      btn.classList.remove('on'); btn.textContent='🗔 맨 앞에 띄우기';
+      restoreWin(); clampWin();
+    });
+    renderedKey=''; if(state) render();
+  }).catch(function(e){ pipTip('맨 앞 창을 열 수 없어요 ('+(e&&e.name||'오류')+'). Chrome 또는 Edge 최신 버전에서 열어 주세요.'); });
+}
+function pipSetup(){
+  floatLinkSetup();
+  if(docPipSupported()){ docPipSetup(); return; }
+  if(!pipSupported()) return;
+  PIP.canvas=document.createElement('canvas'); PIP.canvas.width=PW; PIP.canvas.height=PH;
+  PIP.ctx=PIP.canvas.getContext('2d');
+  PIP.video=$('pipVideo');
+  pipDraw();
+  try{ PIP.video.srcObject=PIP.canvas.captureStream(4); }catch(e){ return; }
+  PIP.video.muted=true;
+  var pr=PIP.video.play(); if(pr&&pr.catch) pr.catch(function(){});
+  var btn=$('pipBtn'); btn.classList.remove('hidden');
+  btn.onclick=function(){
+    if(document.pictureInPictureElement){ document.exitPictureInPicture().catch(function(){}); return; }
+    var go=function(){ PIP.video.requestPictureInPicture().then(function(){ pipTip('미니 창이 열렸어요. 다른 프로그램을 써도 맨 앞에 떠 있습니다.\n응답할 때는 미니 창의 ‘탭으로 돌아가기’를 누르세요. 창 모서리를 끌어 크기를 바꿀 수 있어요.'); })
+      .catch(function(){ pipTip('이 브라우저에서는 미니 창을 열 수 없어요. Chrome 또는 Edge에서 열어 주세요.'); }); };
+    if(PIP.video.readyState<1){ PIP.video.play().then(go,go); } else go();
+  };
+  PIP.video.addEventListener('enterpictureinpicture',function(){ btn.classList.add('on'); btn.textContent='🗔 미니 창 닫기'; });
+  PIP.video.addEventListener('leavepictureinpicture',function(){ btn.classList.remove('on'); btn.textContent='🗔 항상 위에 띄우기'; });
+  setInterval(pipDraw, 500);
+}
+function pipTip(t){ var d=$('pipTip'); d.textContent=t; d.style.whiteSpace='pre-line'; d.classList.remove('hidden'); clearTimeout(pipTip.t); pipTip.t=setTimeout(function(){ d.classList.add('hidden'); },7000); }
+function pipSlideImg(n){
+  if(PIP.img[n]) return PIP.img[n];
+  var id=(BOOT.slideIds||[])[n-1]; var o={ok:false,el:null}; PIP.img[n]=o;
+  if(!id || !BOOT.studentSlides) return o;
+  var urls=['https://lh3.googleusercontent.com/d/'+id+'=w960','https://drive.google.com/thumbnail?id='+id+'&sz=w960'], k=0;
+  (function tryNext(){
+    if(k>=urls.length) return;
+    var im=new Image(); im.crossOrigin='anonymous';      // 교차 출처 허용 이미지만 그림 (안 되면 글자만 표시)
+    im.onload=function(){ o.ok=true; o.el=im; pipDraw(); };
+    im.onerror=function(){ tryNext(); };
+    im.src=urls[k++];
+  })();
+  return o;
+}
+function wrapText(ctx,text,x,y,maxW,lh,maxLines){
+  var lines=[], paras=String(text||'').split('\n');
+  paras.forEach(function(p){
+    var line='', toks=p.split(/(\s+)/);
+    toks.forEach(function(tk){
+      if(!tk) return;
+      var t=line+tk;
+      if(ctx.measureText(t).width<=maxW){ line=t; return; }
+      if(/^\s+$/.test(tk)){ lines.push(line); line=''; return; }
+      if(line.trim()){ lines.push(line.replace(/\s+$/,'')); line=''; }
+      for(var i=0;i<tk.length;i++){ var u=line+tk[i]; if(ctx.measureText(u).width>maxW && line){ lines.push(line); line=tk[i]; } else line=u; }
+    });
+    lines.push(line);
+  });
+  if(lines.length>maxLines){ lines=lines.slice(0,maxLines); lines[maxLines-1]=lines[maxLines-1].replace(/.{1,2}$/,'…'); }
+  lines.forEach(function(l,i){ ctx.fillText(l,x,y+i*lh); });
+  return lines.length;
+}
+function pipTimer(){
+  if(!state||!state.timerEnd) return '';
+  var left=Math.max(0,state.timerEnd-(Date.now()+clockSkew)), s=Math.ceil(left/1000);
+  return left>0 ? '⏱ '+Math.floor(s/60)+':'+('0'+s%60).slice(-2) : '⏱ 종료';
+}
+function pipDraw(){
+  if(!PIP.ctx) return;
+  var c=PIP.ctx, BR='#15393f', AC='#e7a33e';
+  c.textBaseline='alphabetic'; c.textAlign='left';
+  if(!state){ c.fillStyle=BR; c.fillRect(0,0,PW,PH); c.fillStyle='#fff'; c.font='700 34px '+FONT; c.fillText('연결 중…',40,PH/2); return; }
+  var a=state.activityId?ACTS[state.activityId]:null, tm=pipTimer(), n=state.slide||1;
+  if((a?a.id:'')!==PIP.lastAct){ PIP.lastAct=a?a.id:''; PIP.actAt=Date.now(); }
+  if(!a){
+    var im=pipSlideImg(n);
+    c.fillStyle='#0d1417'; c.fillRect(0,0,PW,PH);
+    if(im.ok){ c.drawImage(im.el,0,0,PW,540); }
+    else { c.fillStyle=BR; c.fillRect(0,0,PW,540); c.fillStyle='rgba(255,255,255,.6)'; c.font='600 24px '+FONT; c.fillText('슬라이드 '+n,48,90); c.fillStyle='#fff'; c.font='800 46px '+FONT; wrapText(c,SLIDE_T[n]||'',48,170,PW-96,62,5); }
+    c.fillStyle=BR; c.fillRect(0,540,PW,60);
+    c.fillStyle='#fff'; c.font='700 22px '+FONT;
+    var lab='슬라이드 '+n+' / '+(BOOT.slides||[]).length+'  ·  '+(SLIDE_T[n]||'');
+    while(c.measureText(lab).width>PW-(tm?220:60) && lab.length>4) lab=lab.slice(0,-2);
+    c.fillText(lab,24,579);
+    if(tm){ c.textAlign='right'; c.fillStyle=AC; c.font='800 28px '+FONT; c.fillText(tm,PW-24,581); c.textAlign='left'; }
+    return;
+  }
+  // 활동 화면
+  var sub=a.type!=='info'&&a.type!=='qna'?submittedFor(a):null;
+  c.fillStyle='#f4f2ee'; c.fillRect(0,0,PW,PH);
+  c.fillStyle=BR; c.fillRect(0,0,PW,76);
+  c.fillStyle=AC; c.font='800 26px '+FONT; c.fillText(a.type==='info'?'● 대기':(a.type==='qna'?'● 질의응답':'▶ 활동'),28,48);
+  c.fillStyle='rgba(255,255,255,.75)'; c.font='600 20px '+FONT; c.fillText('슬라이드 '+a.slide,190,47);
+  if(tm){ c.textAlign='right'; c.fillStyle='#fff'; c.font='800 34px '+FONT; c.fillText(tm,PW-28,51); c.textAlign='left'; }
+  c.fillStyle='#1d2433'; c.font='800 40px '+FONT; var tl=wrapText(c,a.title,36,138,PW-72,50,2);
+  c.fillStyle='#374151'; c.font='500 27px '+FONT; wrapText(c,a.prompt||'',36,138+tl*50+14,PW-72,40,(a.type==='poll'||a.type==='multi')?2:5);
+  if((a.type==='poll'||a.type==='multi') && a.options){
+    c.font='500 23px '+FONT; var y=138+tl*50+14+2*40+16;
+    var ans = state.reveal && state.answer!==undefined ? [].concat(state.answer) : [];
+    a.options.slice(0,6).forEach(function(o,i){ if(y>PH-120) return; c.fillStyle=ans.indexOf(i)>=0?'#2f7d5b':'#1d2433'; var t=(ans.indexOf(i)>=0?'✓ ':(i+1)+'. ')+o; while(c.measureText(t).width>PW-90 && t.length>4) t=t.slice(0,-2); c.fillText(t,48,y); y+=34; });
+  }
+  // 상태 띠
+  var msg, bg, fg='#fff';
+  if(a.type==='info'){ msg='다음 활동을 기다리는 중입니다'; bg='#6b7280'; }
+  else if(a.type==='qna'){ msg='질문은 참여 화면의 [질문하기] 탭에서 남겨 주세요'; bg=BR; }
+  else if(sub){ msg='✓ 제출 완료 · 고치려면 ‘탭으로 돌아가기’를 누르세요'; bg='#2f7d5b'; }
+  else if(!state.open || (state.reveal && state.answer!==undefined)){ msg='응답이 마감되었습니다'; bg='#b4472f'; }
+  else { msg='응답할 차례예요! 미니 창의 ‘탭으로 돌아가기’를 누르세요'; bg=AC; fg='#1d2433'; }
+  c.fillStyle=bg; c.fillRect(0,PH-84,PW,84);
+  c.fillStyle=fg; c.font='800 28px '+FONT; c.textAlign='center'; c.fillText(msg,PW/2,PH-32); c.textAlign='left';
+  // 새 활동이 열리면 10초 동안 테두리 깜박임
+  if(Date.now()-PIP.actAt<10000 && !sub && a.type!=='info' && Math.floor(Date.now()/500)%2===0){ c.strokeStyle=AC; c.lineWidth=14; c.strokeRect(7,7,PW-14,PH-14); }
+}
+
+// ── 컴퓨터 화면: 큰 슬라이드 + 끌어서 옮기는 참여 창 ──
+var DESK=false, deskShown=0, deskImgs={}, lastActForWin=null;
+function wantDesk(){ try{ return window.matchMedia('(pointer:fine)').matches && window.innerWidth>=900 && window.innerHeight>=520; }catch(e){ return false; } }
+function deskSetup(){
+  applyDesk();
+  window.addEventListener('resize',function(){ applyDesk(); clampWin(); });
+  var head=$('winHead'), win=$('win'), drag=null;
+  head.addEventListener('pointerdown',function(e){
+    if(!DESK || e.target.closest('button')) return;
+    var r=win.getBoundingClientRect();
+    drag={dx:e.clientX-r.left, dy:e.clientY-r.top};
+    win.style.left=r.left+'px'; win.style.top=r.top+'px'; win.style.right='auto';
+    head.setPointerCapture(e.pointerId); e.preventDefault();
+  });
+  head.addEventListener('pointermove',function(e){
+    if(!drag) return;
+    placeWin(e.clientX-drag.dx, e.clientY-drag.dy);
+  });
+  function end(){ if(!drag) return; drag=null; saveWin(); }
+  head.addEventListener('pointerup',end); head.addEventListener('pointercancel',end);
+  head.addEventListener('dblclick',function(e){ if(!e.target.closest('button')) toggleMin(); });
+  $('winMin').onclick=function(){ toggleMin(); };
+  // 크기 조절(오른쪽 아래 모서리) 결과도 기억
+  if(window.ResizeObserver){ new ResizeObserver(function(){ document.documentElement.style.setProperty('--hh', headH()+'px'); clampWin(); }).observe(document.querySelector('header')); }
+  if(window.ResizeObserver){ var t=null; new ResizeObserver(function(){ clearTimeout(t); t=setTimeout(saveWin,300); }).observe(win); }
+  restoreWin();
+}
+function applyDesk(){
+  document.documentElement.style.setProperty('--hh', headH()+'px');
+  var d=wantDesk(); if(d===DESK) return;
+  DESK=d; document.body.classList.toggle('desk',d);
+  document.documentElement.style.setProperty('--hh', headH()+'px');
+  renderedKey=''; deskShown=0; if(state) render();
+  if(d){ restoreWin(); clampWin(); }
+}
+function headH(){ var h=document.querySelector('header'); return (h&&h.offsetHeight)||62; }
+function placeWin(x,y){
+  var win=$('win'), w=win.offsetWidth, h=win.offsetHeight, top=headH()+4;
+  // 창 전체가 화면 안에 머물도록 (창이 화면보다 크면 머리줄만은 보이게)
+  x=Math.max(4, Math.min(window.innerWidth-w-4, x));
+  y=Math.max(top, Math.min(Math.max(top, window.innerHeight-h-4), y));
+  win.style.left=x+'px'; win.style.top=y+'px'; win.style.right='auto';
+}
+function clampWin(){ if(!DESK) return; var win=$('win'); if(win.style.left){ placeWin(parseFloat(win.style.left), parseFloat(win.style.top)); } }
+function saveWin(){
+  if(!DESK || DPIP.win) return; var win=$('win');
+  var o={l:win.style.left||'', t:win.style.top||'', min:win.classList.contains('min')};
+  if(!o.min){ o.w=win.offsetWidth; o.h=win.offsetHeight; }
+  else { var prev={}; try{ prev=JSON.parse(lsGet('win')||'{}'); }catch(e){} o.w=prev.w; o.h=prev.h; }
+  lsSet('win',JSON.stringify(o));
+}
+function restoreWin(){
+  if(!DESK) return; var o={}; try{ o=JSON.parse(lsGet('win')||'{}'); }catch(e){}
+  var win=$('win');
+  if(o.w && o.h){ win.style.width=o.w+'px'; win.style.height=o.h+'px'; }
+  if(o.l){ win.style.left=o.l; win.style.top=o.t; win.style.right='auto'; clampWin(); }
+  win.classList.toggle('min',!!o.min); updMinBtn();
+}
+function toggleMin(force){
+  var win=$('win'), m = force===undefined ? !win.classList.contains('min') : force;
+  win.classList.toggle('min',m); updMinBtn(); saveWin(); clampWin();
+}
+function updMinBtn(){ var m=$('win').classList.contains('min'); $('winMin').textContent=m?'+':'–'; $('winMin').title=m?'펴기':'접기'; }
+function deskUpdate(){
+  if(!state) return;
+  // 창 머리줄 상태 표시 + 새 활동이 열리면 접힌 창 자동으로 펴기
+  var a=state.activityId?ACTS[state.activityId]:null;
+  $('winState').textContent = a ? ('▶ '+a.title) : ('슬라이드 '+(state.slide||1));
+  var aid=a?a.id:'';
+  if(lastActForWin!==null && aid!==lastActForWin && a && a.type!=='info'){
+    if(DESK){ toggleMin(false); var h=$('winHead'); h.classList.remove('flash'); void h.offsetWidth; h.classList.add('flash'); }
+  }
+  lastActForWin=aid;
+  if(!DESK) return;
+  var n=state.slide||1; if(n===deskShown) return; deskShown=n;
+  var img=$('deskImg'), fb=$('deskFb');
+  var id=(BOOT.slideIds||[])[n-1];
+  function showFb(){ img.style.display='none'; fb.style.display='block'; fb.querySelector('.n').textContent='슬라이드 '+n+' / '+(BOOT.slides||[]).length; fb.querySelector('.t').textContent=SLIDE_T[n]||''; }
+  if(!id || !BOOT.studentSlides){ showFb(); return; }
+  var urls=['https://lh3.googleusercontent.com/d/'+id+'=w1920','https://drive.google.com/thumbnail?id='+id+'&sz=w1920'], k=0;
+  img.onerror=function(){ k++; if(k<urls.length) img.src=urls[k]; else showFb(); };
+  img.onload=function(){ img.style.display='block'; fb.style.display='none'; };
+  img.src=urls[0];
+}
+
+start();
+
+}
+</script>
+<script>
+(function(){
+  function fail(msg){
+    var v=document.getElementById('actView');
+    document.getElementById('joinView').classList.add('hidden');
+    v.innerHTML='<div class="card"><span class="tag">연결 안 됨</span><h1>참여 서버에 연결하지 못했어요</h1><p class="prompt"></p></div>';
+    v.querySelector('.prompt').textContent=msg;
+  }
+  if(!window.__API){ fail('이 파일의 API_URL 에 구글 웹앱 주소(/exec)를 넣거나, 주소 뒤에 ?api=웹앱주소 를 붙여 열어 주세요.'); return; }
+  fetch(window.__API+'?api=boot&_='+Date.now()).then(function(r){ return r.json(); }).then(function(j){
+    if(!j||!j.ok) throw new Error(j&&j.error||'boot');
+    window.__BOOT=j.result; document.title=j.result.title+' · 맨 앞 플로팅';
+    __app();
+  }).catch(function(e){ fail('웹앱 주소가 맞는지, 배포 액세스가 ‘모든 사용자’인지 확인해 주세요. ('+(e&&e.message||e)+')'); });
+})();
+</script>
+</body>
+</html>
