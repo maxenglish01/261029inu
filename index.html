@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>실시간 참여 · 맨 앞 플로팅</title>
 <!--
-  261029 인천대 특강 · 컴퓨터용 ‘맨 앞 띄우기’ 전용 참여 페이지 (V.8.0)
+  261029 인천대 특강 · 컴퓨터용 ‘맨 앞 띄우기’ 전용 참여 페이지 (V.9.0 · 참여 코드)
   - 이 파일 하나를 GitHub Pages 같은 정적 웹호스팅에 올려 쓰세요. (구글 웹앱 안에서는 맨 앞 창 기능이 막혀 있어 따로 둡니다)
   - 아래 API_URL 에 구글 웹앱 주소(/exec 로 끝나는 주소)를 넣으세요.
     또는 주소 뒤에 ?api=웹앱주소 를 붙여 열어도 됩니다.
@@ -157,9 +157,15 @@
   <section id="joinView" class="card hidden">
     <span class="tag">입장</span>
     <h1>반가워요!</h1>
-    <p class="prompt">화면에 표시할 이름(닉네임)을 적어 주세요. 비워 두면 ‘익명’으로 참여합니다. 발표 화면에는 기본적으로 이름이 표시되지 않습니다.</p>
+    <p class="prompt" id="joinMsg">화면에 표시할 이름(닉네임)을 적어 주세요. 비워 두면 ‘익명’으로 참여합니다. 발표 화면에는 기본적으로 이름이 표시되지 않습니다.</p>
+    <div id="codeBox" class="hidden">
+      <label class="f" for="codeInput" style="margin-top:0">참여 코드 <span style="color:var(--warn)">*</span></label>
+      <input type="text" id="codeInput" maxlength="20" inputmode="text" autocomplete="off" placeholder="발표 화면에 보이는 코드">
+      <label class="f" for="nameInput">이름(닉네임)</label>
+    </div>
     <input type="text" id="nameInput" maxlength="20" placeholder="예: 영교 23 / 민지" autocomplete="off">
     <button class="btn" id="joinBtn">참여하기</button>
+    <div class="err" id="joinErr"></div>
   </section>
 
   <section id="actView"></section>
@@ -194,8 +200,8 @@ window.__FLOAT = true;
   window.__API = (q || API_URL || '').trim();
   function apiCall(fn, args){
     var A = window.__API, req;
-    if(fn==='studentSync') req = fetch(A+'?api=sync&_='+Date.now());
-    else if(fn==='getQna') req = fetch(A+'?api=qna&cid='+encodeURIComponent(args[0]||'')+'&_='+Date.now());
+    if(fn==='studentSync') req = fetch(A+'?api=sync&code='+encodeURIComponent(args[0]||'')+'&_='+Date.now());
+    else if(fn==='getQna') req = fetch(A+'?api=qna&cid='+encodeURIComponent(args[0]||'')+'&code='+encodeURIComponent(args[1]||'')+'&_='+Date.now());
     else req = fetch(A, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({fn:fn, args:args})});
     return req.then(function(r){ return r.json(); }).then(function(j){ if(!j || !j.ok) throw new Error((j && j.error) || '서버 오류'); return j.result; });
   }
@@ -203,7 +209,7 @@ window.__FLOAT = true;
     var ok=null, fail=null, r={};
     r.withSuccessHandler=function(f){ ok=f; return r; };
     r.withFailureHandler=function(f){ fail=f; return r; };
-    ['studentSync','getQna','submitResponse','askQuestion','toggleLike'].forEach(function(fn){
+    ['studentSync','getQna','submitResponse','askQuestion','toggleLike','checkCode'].forEach(function(fn){
       r[fn]=function(){ var args=[].slice.call(arguments); apiCall(fn,args).then(function(x){ ok&&ok(x); }, function(e){ fail&&fail(e); }); };
     });
     return r;
@@ -244,26 +250,64 @@ $('hTitle').textContent = BOOT.title;
 function showName(){ $('hName').textContent = myName ? (myName+' 님') : '익명 참여'; }
 
 // ── 서버 호출 ──
+var joinCode = lsGet('code') || '';
+function isCodeErr(e){ return !!(e && String(e.message||e).indexOf('CODE_INVALID')>=0); }
 function call(fn, args, ok, fail){
   var r = google.script.run.withSuccessHandler(function(x){ failCount=0; setConn(true); ok&&ok(x); })
-    .withFailureHandler(function(e){ failCount++; setConn(failCount<3); fail&&fail(e); });
+    .withFailureHandler(function(e){
+      if(isCodeErr(e) && fn!=='checkCode'){ codeInvalid(); return; }
+      failCount++; setConn(failCount<3); fail&&fail(e); });
   r[fn].apply(r, args||[]);
 }
 function setConn(good){ var c=$('conn'); c.className='conn'+(good?'':' bad'); c.title=good?'연결됨':'연결 지연'; }
 
-// ── 입장 ──
+// ── 입장 (참여 코드 + 이름) ──
+var HOSTTAB=false, begun=false, codeBad=false;
+function needJoin(){ return (myName===undefined || myName===null) || (BOOT.codeRequired && !joinCode); }
+function showJoin(msg){
+  $('joinView').classList.remove('hidden');
+  if(BOOT.codeRequired){ $('codeBox').classList.remove('hidden'); }
+  if(myName) $('nameInput').value=myName;
+  try{ var qc=new URLSearchParams(location.search).get('code'); if(qc && !$('codeInput').value) $('codeInput').value=qc; }catch(e){}
+  $('joinErr').textContent = msg||'';
+  if(FLOAT_ONLY) $('joinBtn').textContent='참여하고 맨 앞에 띄우기';
+  (BOOT.codeRequired && !$('codeInput').value ? $('codeInput') : $('nameInput')).focus();
+}
+function doJoin(){
+  var nm=$('nameInput').value.trim().slice(0,20);
+  var cd=BOOT.codeRequired ? $('codeInput').value.trim() : '';
+  var btn=$('joinBtn');
+  function proceed(){
+    myName=nm; lsSet('name',nm); joinCode=cd; lsSet('code',cd);
+    $('joinView').classList.add('hidden'); $('joinErr').textContent='';
+    if(begun || codeBad){ location.reload(); return; }
+    if(HOSTTAB) hostLaunch(); else { begin(); if(FLOAT_ONLY) openDocPip(); }
+  }
+  if(!BOOT.codeRequired) return proceed();
+  if(!cd){ $('joinErr').textContent='참여 코드를 입력해 주세요.'; $('codeInput').focus(); return; }
+  btn.disabled=true; var old=btn.textContent; btn.textContent='코드 확인 중…';
+  call('checkCode',[cd],function(){ btn.disabled=false; btn.textContent=old; proceed(); },function(e){
+    btn.disabled=false; btn.textContent=old;
+    $('joinErr').textContent = isCodeErr(e) ? '참여 코드가 맞지 않아요. 발표 화면의 코드를 확인해 주세요.' : '연결에 실패했어요. 잠시 후 다시 눌러 주세요.';
+    $('codeInput').select();
+  });
+}
+function codeInvalid(){
+  // 저장된 코드가 틀렸거나 강사가 코드를 바꾼 경우 → 다시 입력받기
+  if(codeBad) return; codeBad=true;
+  joinCode=''; lsSet('code','');
+  clearTimeout(pollTimer);
+  document.body.classList.remove('floatonly');
+  ['actView','qnaView'].forEach(function(id){ var x=$(id); if(x) x.classList.add('hidden'); });
+  var nv=$('nav'); if(nv) nv.classList.add('hidden');
+  showJoin('참여 코드가 바뀌었거나 맞지 않아요. 발표 화면의 코드를 다시 입력해 주세요.');
+}
 function start(){
-  var HOSTTAB = FLOAT_ONLY && !MINI;   // 처음 연 페이지: 참여는 ‘고정 창’에 맡기고 자신은 닫아도 됨
-  if(myName===undefined || myName===null){
-    $('joinView').classList.remove('hidden');
-    $('nameInput').focus();
-    if(FLOAT_ONLY) $('joinBtn').textContent='참여하고 맨 앞에 띄우기';
-    $('joinBtn').onclick=function(){
-      myName=$('nameInput').value.trim().slice(0,20); lsSet('name',myName); $('joinView').classList.add('hidden');
-      if(HOSTTAB) hostLaunch(); else { begin(); if(FLOAT_ONLY) openDocPip(); }
-    };
-    $('nameInput').addEventListener('keydown',function(e){ if(e.key==='Enter') $('joinBtn').click(); });
-  } else if(HOSTTAB) hostShow(false);
+  HOSTTAB = FLOAT_ONLY && !MINI;   // 처음 연 페이지: 참여는 ‘고정 창’에 맡기고 자신은 닫아도 됨
+  $('joinBtn').onclick=doJoin;
+  ['nameInput','codeInput'].forEach(function(id){ $(id).addEventListener('keydown',function(e){ if(e.key==='Enter') doJoin(); }); });
+  if(needJoin()) showJoin();
+  else if(HOSTTAB) hostShow(false);
   else begin();
 }
 
@@ -301,6 +345,7 @@ if(MINI) document.body.classList.add('mini');
 // 맨 앞 참여 창이 떠 있는 동안 이 창을 닫으려 하면 한 번 묻기 (닫으면 참여 창도 닫히므로)
 window.addEventListener('beforeunload',function(e){ if(DPIP.win && !DPIP.win.closed){ e.preventDefault(); e.returnValue=''; return ''; } });
 function begin(){
+  begun=true;
   showName();
   if(FLOAT_ONLY) launchSetup();
   else if(window.__FLOAT) setTimeout(function(){ pipTip('이 브라우저는 ‘맨 앞에 띄우기’를 지원하지 않아 이 화면에서 참여합니다. Chrome 또는 Edge로 열면 맨 앞 창을 쓸 수 있어요.'); },800);
@@ -316,7 +361,7 @@ function begin(){
 var pollTimer=null;
 function poll(){
   clearTimeout(pollTimer);
-  call('studentSync', [], function(s){
+  call('studentSync', [joinCode], function(s){
     clockSkew = s.now - Date.now();
     state = s; render();
     schedule();
@@ -468,7 +513,7 @@ function send(a, btn, err){
   else if(a.type==='text') payload={text:d.text||'',tag:d.tag};
   else { payload={}; a.fields.forEach(function(f){ payload[f.key]=d[f.key]||''; }); }
   btn.disabled=true; btn.textContent='보내는 중…'; err.textContent='';
-  call('submitResponse',[clientId,myName||'',a.id,payload],function(){
+  call('submitResponse',[clientId,myName||'',a.id,payload,joinCode],function(){
     subs[a.id]={at:Date.now()+clockSkew,p:payload}; saveSubs();
     delete draft[a.id]; renderedKey=''; render();
   },function(e){
@@ -501,14 +546,14 @@ function buildQna(){
   b.onclick=function(){
     var t=ta.value.trim(); if(!t){ err.textContent='질문을 입력해 주세요.'; return; }
     b.disabled=true; err.textContent='';
-    call('askQuestion',[clientId,myName||'',t],function(){ ta.value=''; b.disabled=false; err.textContent=''; loadQna(); },function(e){ b.disabled=false; err.textContent=e&&e.message||'전송 실패'; });
+    call('askQuestion',[clientId,myName||'',t,joinCode],function(){ ta.value=''; b.disabled=false; err.textContent=''; loadQna(); },function(e){ b.disabled=false; err.textContent=e&&e.message||'전송 실패'; });
   };
   c1.appendChild(ta); c1.appendChild(b); c1.appendChild(err);
   v.appendChild(c1);
   v.appendChild(el('div',{cls:'card',id:'qList'}));
 }
 function loadQna(quiet){
-  call('getQna',[clientId],function(list){ qnaList=list; if(tab==='qna'){ drawQna(); markSeen(); } updateBadge(); });
+  call('getQna',[clientId,joinCode],function(list){ qnaList=list; if(tab==='qna'){ drawQna(); markSeen(); } updateBadge(); });
 }
 function markSeen(){ lastQnaSeen = qnaList.reduce(function(m,q){ return Math.max(m,q.ts); }, lastQnaSeen); lsSet('qseen',lastQnaSeen); }
 function updateBadge(){
@@ -523,7 +568,7 @@ function drawQna(){
     var like=el('button',{cls:'like'+(q.liked?' on':''),text:'♥ '+q.likes});
     like.onclick=function(){
       q.liked=!q.liked; q.likes+=q.liked?1:-1; drawQna();
-      call('toggleLike',[clientId,q.id],function(){ loadQna(); });
+      call('toggleLike',[clientId,q.id,joinCode],function(){ loadQna(); });
     };
     var meta = (q.mine?'내 질문 · ':'')+(q.answered?'답변 완료':'');
     box.appendChild(el('div',{cls:'q'+(q.answered?' ans':'')},[el('div',{cls:'tx'},[el('div',{text:q.text}), meta?el('div',{cls:'meta',text:meta}):null]), like]));
