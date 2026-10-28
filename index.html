@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>실시간 참여 · 맨 앞 플로팅</title>
 <!--
-  261029 인천대 특강 · 컴퓨터용 ‘맨 앞 플로팅’ 참여 페이지 (V.6.0)
+  261029 인천대 특강 · 컴퓨터용 ‘맨 앞 띄우기’ 전용 참여 페이지 (V.7.0)
   - 이 파일 하나를 GitHub Pages 같은 정적 웹호스팅에 올려 쓰세요. (구글 웹앱 안에서는 맨 앞 창 기능이 막혀 있어 따로 둡니다)
   - 아래 API_URL 에 구글 웹앱 주소(/exec 로 끝나는 주소)를 넣으세요.
     또는 주소 뒤에 ?api=웹앱주소 를 붙여 열어도 됩니다.
@@ -104,6 +104,21 @@
   #pipNotice button{font:inherit;font-weight:700;font-size:13px;border:0;border-radius:999px;padding:7px 12px;background:var(--accent);color:#1d2433;cursor:pointer;white-space:nowrap}
   body.pipout:not(.desk) main{display:none}
   .floatlink{flex:0 0 auto;font-size:13px;font-weight:700;padding:7px 12px;border-radius:999px;background:var(--accent);color:#1d2433;text-decoration:none;white-space:nowrap}
+  /* ── 맨 앞 띄우기 전용 화면 (컴퓨터용 플로팅 페이지) ── */
+  #launch{display:none}
+  body.floatonly #win,body.floatonly #deskStage,body.floatonly #pipNotice,body.floatonly #pipBtn{display:none!important}
+  body.floatonly{min-height:100vh}
+  body.floatonly #launch{display:flex;min-height:calc(100vh - 70px);align-items:center;justify-content:center;padding:24px 16px}
+  #launch .lc{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:34px 30px 28px;max-width:520px;width:100%;text-align:center;box-shadow:0 16px 40px rgba(0,0,0,.08)}
+  #launch .ic{font-size:46px;line-height:1}
+  #launch h1{font-size:24px;margin:14px 0 10px}
+  #launch p{font-size:15px;line-height:1.6;color:var(--muted);margin:0 0 6px}
+  #launch .big{display:block;width:100%;font:inherit;font-size:20px;font-weight:800;padding:18px;border:0;border-radius:16px;background:var(--brand);color:#fff;margin-top:20px;cursor:pointer}
+  #launch .big:hover{filter:brightness(1.1)}
+  #launch.on .big{background:var(--accent);color:#1d2433}
+  #launch .st{display:inline-block;margin-top:14px;font-size:13px;font-weight:700;color:var(--ok);background:#e9f5ef;border-radius:999px;padding:5px 12px}
+  #launch .fb{margin-top:16px;font-size:13px}
+  #launch .fb a{color:var(--muted)}
   .trow{display:flex;align-items:center;gap:10px}
   .trow .t{flex:1;min-width:0}
   .pipbtn{flex:0 0 auto;font:inherit;font-size:13px;font-weight:700;padding:7px 12px;border-radius:999px;border:1.5px solid rgba(255,255,255,.55);background:transparent;color:#fff;cursor:pointer}
@@ -148,6 +163,13 @@
 </nav>
 </div>
 <video id="pipVideo" muted playsinline aria-hidden="true"></video>
+<section id="launch" aria-live="polite"><div class="lc">
+  <div class="ic">🗔</div>
+  <h1 id="lTitle">참여 창을 맨 앞에 띄워 주세요</h1>
+  <p id="lText">버튼을 누르면 참여 창이 따로 떠서, 다른 프로그램을 쓰는 동안에도 항상 맨 앞에 보입니다.<br>응답·질문은 모두 그 창에서 합니다.</p>
+  <button class="big" id="lBtn" type="button">🗔 맨 앞에 띄우기</button>
+  <div class="st hidden" id="lState"></div>
+</div></section>
 <div id="pipNotice"><span>참여 창이 <b>맨 앞 창</b>으로 떠 있어요. 다른 프로그램을 써도 계속 보입니다.</span><button id="pipBack" type="button">창 다시 합치기</button></div>
 <div id="pipTip" class="piptip hidden"></div>
 
@@ -225,12 +247,17 @@ function start(){
   if(myName===undefined || myName===null){
     $('joinView').classList.remove('hidden');
     $('nameInput').focus();
-    $('joinBtn').onclick=function(){ myName=$('nameInput').value.trim().slice(0,20); lsSet('name',myName); $('joinView').classList.add('hidden'); begin(); };
+    if(FLOAT_ONLY) $('joinBtn').textContent='참여하고 맨 앞에 띄우기';
+    $('joinBtn').onclick=function(){ myName=$('nameInput').value.trim().slice(0,20); lsSet('name',myName); $('joinView').classList.add('hidden'); begin(); if(FLOAT_ONLY) openDocPip(); };
     $('nameInput').addEventListener('keydown',function(e){ if(e.key==='Enter') $('joinBtn').click(); });
   } else begin();
 }
+var FLOAT_ONLY = false;
+try{ FLOAT_ONLY = !!window.__FLOAT && docPipSupported(); }catch(e){}
 function begin(){
   showName();
+  if(FLOAT_ONLY) launchSetup();
+  else if(window.__FLOAT) setTimeout(function(){ pipTip('이 브라우저는 ‘맨 앞에 띄우기’를 지원하지 않아 이 화면에서 참여합니다. Chrome 또는 Edge로 열면 맨 앞 창을 쓸 수 있어요.'); },800);
   deskSetup();
   pipSetup();
   $('nav').classList.remove('hidden');
@@ -473,6 +500,20 @@ function floatLinkSetup(){
   var a=el('a',{cls:'floatlink',href:BOOT.floatUrl,target:'_blank',rel:'noopener',title:'다른 프로그램 위에도 떠 있는 참여 창을 쓰려면 이 페이지로 접속하세요',text:'🗔 맨 앞 플로팅 참여 화면 ↗'});
   var row=document.querySelector('.trow'); row.insertBefore(a,$('pipBtn'));
 }
+function launchSetup(){
+  document.body.classList.add('floatonly');
+  $('lBtn').onclick=function(){ if(DPIP.win){ try{ DPIP.win.focus(); }catch(e){} } else openDocPip(); };
+  launchState();
+}
+function launchState(){
+  if(!FLOAT_ONLY) return;
+  var on=!!DPIP.win, L=$('launch');
+  L.classList.toggle('on',on);
+  $('lTitle').textContent = on ? '참여 창이 맨 앞에 떠 있어요' : '참여 창을 맨 앞에 띄워 주세요';
+  $('lText').innerHTML = on ? '떠 있는 창에서 응답과 질문을 하세요.<br>창을 닫았다면 아래 버튼으로 다시 띄울 수 있어요.' : '버튼을 누르면 참여 창이 따로 떠서, 다른 프로그램을 쓰는 동안에도 항상 맨 앞에 보입니다.<br>응답·질문은 모두 그 창에서 합니다.';
+  $('lBtn').textContent = on ? '🗔 떠 있는 창 보기' : '🗔 맨 앞에 띄우기';
+  var st=$('lState'); st.classList.toggle('hidden',!on); st.textContent='● 연결됨 · '+(myName?myName+' 님':'익명 참여');
+}
 function docPipSetup(){
   var btn=$('pipBtn'); btn.classList.remove('hidden');
   btn.textContent='🗔 맨 앞에 띄우기';
@@ -494,14 +535,15 @@ function openDocPip(){
     pw.document.body.appendChild(w);
     document.body.classList.add('pipout');
     var btn=$('pipBtn'); btn.classList.add('on'); btn.textContent='🗔 창 다시 합치기';
+    launchState();
     pw.addEventListener('pagehide',function(){
       try{ DPIP.ph.parentNode.insertBefore(w,DPIP.ph); DPIP.ph.remove(); }catch(e){}
       DPIP.win=null; document.body.classList.remove('pipout');
       btn.classList.remove('on'); btn.textContent='🗔 맨 앞에 띄우기';
-      restoreWin(); clampWin();
+      restoreWin(); clampWin(); launchState();
     });
     renderedKey=''; if(state) render();
-  }).catch(function(e){ pipTip('맨 앞 창을 열 수 없어요 ('+(e&&e.name||'오류')+'). Chrome 또는 Edge 최신 버전에서 열어 주세요.'); });
+  }).catch(function(e){ launchState(); pipTip('맨 앞 창을 열 수 없어요 ('+(e&&e.name||'오류')+'). Chrome 또는 Edge 최신 버전에서 열어 주세요.'); });
 }
 function pipSetup(){
   floatLinkSetup();
@@ -612,7 +654,7 @@ function pipDraw(){
 
 // ── 컴퓨터 화면: 큰 슬라이드 + 끌어서 옮기는 참여 창 ──
 var DESK=false, deskShown=0, deskImgs={}, lastActForWin=null;
-function wantDesk(){ try{ return window.matchMedia('(pointer:fine)').matches && window.innerWidth>=900 && window.innerHeight>=520; }catch(e){ return false; } }
+function wantDesk(){ if(FLOAT_ONLY) return false; try{ return window.matchMedia('(pointer:fine)').matches && window.innerWidth>=900 && window.innerHeight>=520; }catch(e){ return false; } }
 function deskSetup(){
   applyDesk();
   window.addEventListener('resize',function(){ applyDesk(); clampWin(); });
