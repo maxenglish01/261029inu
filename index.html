@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>실시간 참여 · 맨 앞 플로팅</title>
 <!--
-  261029 인천대 특강 · 컴퓨터용 ‘맨 앞 띄우기’ 전용 참여 페이지 (V.7.0)
+  261029 인천대 특강 · 컴퓨터용 ‘맨 앞 띄우기’ 전용 참여 페이지 (V.8.0)
   - 이 파일 하나를 GitHub Pages 같은 정적 웹호스팅에 올려 쓰세요. (구글 웹앱 안에서는 맨 앞 창 기능이 막혀 있어 따로 둡니다)
   - 아래 API_URL 에 구글 웹앱 주소(/exec 로 끝나는 주소)를 넣으세요.
     또는 주소 뒤에 ?api=웹앱주소 를 붙여 열어도 됩니다.
@@ -118,6 +118,15 @@
   #launch.on .big{background:var(--accent);color:#1d2433}
   #launch .st{display:inline-block;margin-top:14px;font-size:13px;font-weight:700;color:var(--ok);background:#e9f5ef;border-radius:999px;padding:5px 12px}
   #launch .fb{margin-top:16px;font-size:13px}
+  body.mini header{padding:8px 12px 6px}
+  body.mini header .t{font-size:13px}
+  body.mini.floatonly #launch{min-height:calc(100vh - 52px);padding:10px}
+  body.mini #launch .lc{padding:16px 16px 14px;border-radius:16px;box-shadow:none}
+  body.mini #launch .ic{display:none}
+  body.mini #launch h1{font-size:17px;margin:2px 0 6px}
+  body.mini #launch p{font-size:13px;line-height:1.5}
+  body.mini #launch .big{font-size:17px;padding:13px;margin-top:12px}
+  body.mini #launch .st{margin-top:8px}
   #launch .fb a{color:var(--muted)}
   .trow{display:flex;align-items:center;gap:10px}
   .trow .t{flex:1;min-width:0}
@@ -244,16 +253,53 @@ function setConn(good){ var c=$('conn'); c.className='conn'+(good?'':' bad'); c.
 
 // ── 입장 ──
 function start(){
+  var HOSTTAB = FLOAT_ONLY && !MINI;   // 처음 연 페이지: 참여는 ‘고정 창’에 맡기고 자신은 닫아도 됨
   if(myName===undefined || myName===null){
     $('joinView').classList.remove('hidden');
     $('nameInput').focus();
     if(FLOAT_ONLY) $('joinBtn').textContent='참여하고 맨 앞에 띄우기';
-    $('joinBtn').onclick=function(){ myName=$('nameInput').value.trim().slice(0,20); lsSet('name',myName); $('joinView').classList.add('hidden'); begin(); if(FLOAT_ONLY) openDocPip(); };
+    $('joinBtn').onclick=function(){
+      myName=$('nameInput').value.trim().slice(0,20); lsSet('name',myName); $('joinView').classList.add('hidden');
+      if(HOSTTAB) hostLaunch(); else { begin(); if(FLOAT_ONLY) openDocPip(); }
+    };
     $('nameInput').addEventListener('keydown',function(e){ if(e.key==='Enter') $('joinBtn').click(); });
-  } else begin();
+  } else if(HOSTTAB) hostShow(false);
+  else begin();
 }
-var FLOAT_ONLY = false;
-try{ FLOAT_ONLY = !!window.__FLOAT && docPipSupported(); }catch(e){}
+
+// ── 처음 연 페이지(호스트 탭): 작은 ‘고정 창’을 따로 열고, 맨 앞 참여 창은 그 고정 창이 띄움 ──
+//    → 처음 페이지(와 그 브라우저 창)를 닫아도 맨 앞 참여 창은 계속 떠 있음
+var anchorWin=null;
+function anchorUrl(){
+  var q=new URLSearchParams(location.search); q.set('mini','1');
+  return location.pathname+'?'+q.toString();
+}
+function hostLaunch(){
+  var W=440, H=330, L=Math.max(0,(screen.availWidth||1280)-W-24), T=Math.max(0,(screen.availHeight||800)-H-60);
+  try{ anchorWin=window.open(anchorUrl(),'inu1029_anchor','popup=yes,width='+W+',height='+H+',left='+L+',top='+T); }catch(e){ anchorWin=null; }
+  if(!anchorWin){
+    // 팝업이 막혔으면 이 탭에서 바로 띄움 (이 경우 이 탭은 닫지 말 것)
+    begin(); openDocPip(); return;
+  }
+  try{ anchorWin.focus(); }catch(e){}
+  hostShow(true);
+}
+function hostShow(opened){
+  showName();
+  document.body.classList.add('floatonly');
+  $('lTitle').textContent = opened ? '작은 고정 창이 열렸어요' : '참여 창을 맨 앞에 띄워 주세요';
+  $('lText').innerHTML = opened
+    ? '방금 열린 <b>작은 고정 창</b>에서 <b>[🗔 맨 앞에 띄우기]</b>를 한 번 더 누르세요.<br>참여 창이 뜨고 나면 <b>이 탭은 닫아도 됩니다.</b>'
+    : '버튼을 누르면 작은 고정 창이 열리고, 거기서 참여 창을 맨 앞에 띄웁니다.<br>참여 창이 뜬 뒤에는 이 탭을 닫아도 계속 떠 있어요.';
+  $('lBtn').textContent = opened ? '🗔 고정 창 다시 열기' : '🗔 맨 앞에 띄우기';
+  $('lBtn').onclick=hostLaunch;
+  var st=$('lState'); st.classList.toggle('hidden',!opened); st.textContent='고정 창 열림 · '+(myName?myName+' 님':'익명 참여');
+}
+var FLOAT_ONLY = false, MINI = false;
+try{ FLOAT_ONLY = !!window.__FLOAT && docPipSupported(); MINI = FLOAT_ONLY && new URLSearchParams(location.search).get('mini')==='1'; }catch(e){}
+if(MINI) document.body.classList.add('mini');
+// 맨 앞 참여 창이 떠 있는 동안 이 창을 닫으려 하면 한 번 묻기 (닫으면 참여 창도 닫히므로)
+window.addEventListener('beforeunload',function(e){ if(DPIP.win && !DPIP.win.closed){ e.preventDefault(); e.returnValue=''; return ''; } });
 function begin(){
   showName();
   if(FLOAT_ONLY) launchSetup();
@@ -509,8 +555,16 @@ function launchState(){
   if(!FLOAT_ONLY) return;
   var on=!!DPIP.win, L=$('launch');
   L.classList.toggle('on',on);
+  if(MINI){
+    $('lTitle').textContent = on ? '참여 창이 떠 있어요' : '참여 창 고정 창';
+    $('lText').innerHTML = on
+      ? '⚠ 이 작은 창은 <b>닫지 말고 최소화(—)</b>해 두세요.<br>처음 열었던 탭·브라우저 창은 닫아도 됩니다.'
+      : '아래 버튼을 누르면 참여 창이 모든 프로그램 위에 뜹니다.';
+    try{ if(on){ window.resizeTo(380,250); } else { window.resizeTo(440,330); } }catch(e){}
+  } else {
   $('lTitle').textContent = on ? '참여 창이 맨 앞에 떠 있어요' : '참여 창을 맨 앞에 띄워 주세요';
-  $('lText').innerHTML = on ? '떠 있는 창에서 응답과 질문을 하세요.<br>창을 닫았다면 아래 버튼으로 다시 띄울 수 있어요.' : '버튼을 누르면 참여 창이 따로 떠서, 다른 프로그램을 쓰는 동안에도 항상 맨 앞에 보입니다.<br>응답·질문은 모두 그 창에서 합니다.';
+  $('lText').innerHTML = on ? '떠 있는 창에서 응답과 질문을 하세요.<br>⚠ 이 탭을 닫으면 참여 창도 닫힙니다. 닫지 말고 최소화해 두세요.' : '버튼을 누르면 참여 창이 따로 떠서, 다른 프로그램을 쓰는 동안에도 항상 맨 앞에 보입니다.<br>응답·질문은 모두 그 창에서 합니다.';
+  }
   $('lBtn').textContent = on ? '🗔 떠 있는 창 보기' : '🗔 맨 앞에 띄우기';
   var st=$('lState'); st.classList.toggle('hidden',!on); st.textContent='● 연결됨 · '+(myName?myName+' 님':'익명 참여');
 }
